@@ -21,16 +21,16 @@ class iso _TestTokens is UnitTest
           let text: String = recover file.read_string(file.size()) end
           try
             let getToken : GetToken = GetToken(t)?
-            let tokens: (Match | None) = getToken(text)
-            match tokens
-              | None =>
-                  t.fail("No Tokens found")
-                  t.complete(true)
-              | let tokens': Match =>
-                for group in tokens'.groups().values() do
+            let tokens: MatchIterator = getToken(text)
+            for token in tokens do
+              for group in token.groups().values() do
+                if (group.size() > 0) then
                   t.log(group)
                 end
+                t.log(group)
+              end
             end
+            t.fail("true")
           else
             t.fail("Regex Error")
             t.complete(true)

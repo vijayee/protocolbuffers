@@ -34,7 +34,11 @@ primitive Tokens
       ("ENUM_FIELD_WITH_VALUE", "([A-Za-z_][0-9A-Za-z_]*)\\s*=\\s*(0x[0-9A-Fa-f]+|-\"+\\|\\d+)")
       ("ENUM_FIELD", "([A-Za-z_][0-9A-Za-z_]*)")
     ]
-
+class MatchedTokens
+primitive Tokenize
+  fun apply() =>
+    let tokens = Tokens()
+    for token in token
 class GetToken
   let _regex: Regex
 
@@ -68,9 +72,5 @@ class GetToken
     _regex = recover Regex(rx)? end
     t.log("success")
 
-  fun apply(text: String val) : (Match ref | None) =>
-    try
-      _regex(text)?
-    else
-      None
-    end
+  fun apply(text: String val) : MatchIterator ref =>
+    _regex.matches(text)
