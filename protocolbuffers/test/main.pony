@@ -1,6 +1,5 @@
 use ".."
 use "files"
-use "regex"
 use "ponytest"
 
 actor Main is TestList
@@ -14,25 +13,73 @@ actor Main is TestList
 class iso _TestTokens is UnitTest
   fun name(): String => "Testing Tokens"
   fun apply(t: TestHelper) =>
+    let testTokens = [
+      "message"
+      "Point"
+      "{"
+      "required"
+      "int32"
+      "x"
+      "="
+      "1"
+      ";"
+      "required"
+      "int32"
+      "y"
+      "="
+      "2"
+      ";"
+      "optional"
+      "string"
+      "label"
+      "="
+      "3"
+      ";"
+      "}"
+      "message"
+      "Line"
+      "{"
+      "required"
+      "Point"
+      "start"
+      "="
+      "1"
+      ";"
+      "required"
+      "Point"
+      "end"
+      "="
+      "2"
+      ";"
+      "optional"
+      "string"
+      "label"
+      "="
+      "3"
+      ";"
+      "}"
+      "message"
+      "A"
+      "{"
+      "}"
+    ]
     try
-      let path: FilePath = FilePath(t.env.root as AmbientAuth, "protocolbuffers/test/proto/test_message.proto")?
+      let path: FilePath = FilePath(t.env.root as AmbientAuth, "protocolbuffers/test/fixtures/comments.proto")?
       match CreateFile(path)
       | let file: File =>
-          let text: String = recover file.read_string(file.size()) end
+          let text: String ref = recover ref file.read_string(file.size()) end
+          let tokens: Array[String] = Tokenize(text)
+          var i : USize = 0
+          if tokens.size() != testTokens.size() then
+            t.fail("Invalid Token Count")
+          end
           try
-            let getToken : GetToken = GetToken(t)?
-            let tokens: MatchIterator = getToken(text)
-            for token in tokens do
-              for group in token.groups().values() do
-                if (group.size() > 0) then
-                  t.log(group)
-                end
-                t.log(group)
-              end
+            while i < tokens.size() do
+              t.assert_true(tokens(i)? == testTokens(i)?)
+              i = i + 1
             end
-            t.fail("true")
           else
-            t.fail("Regex Error")
+            t.fail("Token Error")
             t.complete(true)
           end
         | FileError =>
