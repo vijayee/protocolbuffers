@@ -8,8 +8,9 @@ class Schema
   var messages: Array[Message]
   var options: OptionMap
   var extends: Array[Extend]
-  
-  new create(package': String ref = String, version': USize = 0, imports': Array[String ref] = Array[String ref], enums': Array[Enum] = Array[Enum], messages': Array[Message] = Array[Message], options': OptionMap = OptionMap, extends': Array[Extend] = Array[Extend]) =>
+  var services: Array[Service]
+
+  new create(package': String ref = String, version': USize = 3, imports': Array[String ref] = Array[String ref], enums': Array[Enum] = Array[Enum], messages': Array[Message] = Array[Message], options': OptionMap = OptionMap, extends': Array[Extend] = Array[Extend], services': Array[Services] = Array[Services]) =>
     package = package'
     version = version'
     imports = imports'
@@ -17,6 +18,7 @@ class Schema
     messages = messages'
     options = options'
     extends = extends'
+    services = services'
 
 class EnumValue
   var name: String ref
@@ -124,12 +126,13 @@ class Field
     options = options'
 
 class Message
-  name: String ref
-  enums: Array[Enum]
-  extends: Array[Extend]
-  messages: Array[Message]
-  fields: Array[Field]
-  new create(name': String ref = String, enums': Array[Enum] = Array[Enum](0), extends': Array[Extend] = Array[Extend](0), messages': Array[Message]= Array[Message](0), fields': Array[Field] = Array[Field](0)) =>
+  var name: String ref
+  var enums: Array[Enum]
+  var extends: Array[Extend]
+  var messages: Array[Message]
+  var fields: Array[Field]
+  var extensions: Extension
+  new create(name': String ref = String, enums': Array[Enum] = Array[Enum](0), extends': Array[Extend] = Array[Extend](0), messages': Array[Message]= Array[Message](0), fields': Array[Field] = Array[Field](0), extensions: Extension = Extension) =>
     name = name'
     enums = enums'
     extends = extends'
@@ -137,8 +140,8 @@ class Message
     fields = fields'
 
 class Extend
-  name: String ref
-  message: Message
+  var name: String ref
+  var message: Message
   new create(name': String ref = String, message': Message = Message) =>
     name = name'
     message = message'
@@ -148,4 +151,10 @@ class MessageBody
   var messages: Array[Message]
   var fields: Array[Field]
   var extends: Array[Extend]
-  var extensions: Array[Extension]
+  var extensions: Extension
+  new create(enums': Array[Enum] = Array[Enum](0), messages': Array[Message] = Array[Message](0), fields': Array[Field] = Array[Field], extends': Array[Extend] = Array[Extend](0), extensions': Extension = Extension) =>
+    enums = enums'
+    messages = messages'
+    fields = fields'
+    extends = extends'
+    extendsions = extensions'

@@ -1,4 +1,23 @@
 use "collections"
+primitive IsPackableType
+  fun apply (type: String box) : Bool =>
+    match type
+      | "int32" => true
+      | "int64" => true
+      | "uint32" => true
+      | "uint64" => true
+      | "sint32" => true
+      | "sint64" => true
+      | "bool" => true
+      | "fixed64" => true
+      | "sfixed64" => true
+      | "double" => true
+      | "fixed32" => true
+      | "sfixed32" => true
+      | "float" => true
+    else
+      false
+    end
 
 primitive RemoveQuotes
   fun apply (text: String ref)? =>
@@ -236,7 +255,7 @@ primitive ParseFieldOption
 
       tokens.shift()?
 
-      if tokens(0)? != "]" then
+      if tokens(0)? == "]" then
         error
       end
       options(name) = tokens.shift()?
@@ -462,7 +481,8 @@ primitive ParseMessage
         message.enums = body.enums
         message.messages = body.messages
         message.fields = body.fields
-        message.extends = body.extensions
+        message.extends = body.extends
+        message.extensions = body.extensions
         return message
       end
       body.push(tokens.shift()?)
@@ -528,3 +548,136 @@ primitive ParseMessageBody
 primitive ParseExtend
   fun apply(tokens: Array[String ref]): Extend ? =>
     return Extend(tokens(1)?, ParseMessage(tokens)?)
+
+primitive ContainsQuote
+  fun apply (text: String box) : Bool ? =>
+    if text.size() == 0 then
+      return false
+    end
+    if ((text(0)? == "\"") or (text(0)? == "''))
+      and (try ((text(1)? !="\"") and (text(1)? != "\'")) else false end) then
+        return true
+    end
+    false
+
+primitive Parse
+  fun apply (text: String ref): Schema ? =>
+    var tokens: Array[String ref] = Tokenize(text)
+    var i: USize = 0
+
+    while i < tokens.size() do
+      if ContainsQuotes(tokens(i)?)? then
+        var j: USize = if tokens(i)?.size() == 1 then i + 1 else i end
+
+        while j < tokens.size() do
+          if ContainsQuote(tokens(j)?)? then
+            var collapse: String ref = ""
+            for k in Range(i, j + 1) do
+              collapse = collapse + tokens(k)?
+            end
+            var tokens2: Array[String ref] = tokens.slice(0, i).push(collapse)
+            tokens2.append(tokens, j + 1, tokens.size())
+            tokens = tokens2
+            break
+          end
+          j = j + 1
+        end
+      end
+      i = i + 1
+    end
+
+    var schema: Schema = Schema
+    var firstLine: Bool = true
+    while tokens.size() > 0 do
+      match tokens(0)?
+        | "package" =>
+          schema.package = ParsePackageName(tokens)?
+        | "syntax" =>
+          if not firstLine then
+            error
+          end
+          schema.syntax = ParseVersion(tokens)?
+        | "message" =>
+          schema.messages.push(ParseMessage(tokens)?)
+        | "enum" =>
+          schema.enums.push(ParseEnum(tokens)?)
+        | "option"
+            var option : (String ref, OptionType) = ParseOption(tokens)?
+            if schema.options.contains(option._1) then
+              error
+            end
+            schema.options(option._1) = option._2
+        | "import" =>
+          schema.extends.push(ParseExtend(tokens)?)
+        | "service" =>
+          schema.services.push(ParseService(tokens))
+      else
+        error
+      end
+      firstLine = false
+    end
+
+    for extend in schema.extends.values() do
+      for message in schema.messages.values() do
+        if message.name == extend.name then
+          for field in extend.message.fields.values() do
+            if (message.extensions.to == -1) or (message.extensions.from == -1)
+              or (field.tagg < message.extension.from) or (field.tag > message.extensions.to) then
+                error
+            end
+            message.fields.push(field)
+          end
+        end
+      end
+    end
+    let enumNameIsFieldType = {(enums: Array[Enums], field: Field): Bool =>
+      for enum in enums.values() do
+        if enum.name == field.type then
+          return true
+        end
+      end
+      false
+    } val
+    let findMessage = {(messages: Array[Messages], messagName: String ref) (Message | None) =>
+      for message in messages.values() do
+        if message.name == messageName then
+          return message
+        end
+      end
+      None
+    } val
+    let enumNameIsNestedEnumName: = {(enums: Array[Enums], nestedEnumName: String ref): Bool =>
+      for enum in enums.values() do
+        if enum.name == nestedEnumName then
+          return true
+        end
+      end
+      false
+    } val
+    for message in schema.messages.values() do
+      for field in message.fields.values() do
+        if try field.options("packed")? == true else false end then
+          if IsPackableType(field.type) then
+            if not field.type.contains(".") then
+              if enumNameIsFieldType(message.enums, field) then
+                continue
+              end
+            else
+              var fieldSplit: Array[String ref] = field.type.split(".")
+              if fieldSplit.size() > 2 then
+                error
+              end
+              let message': (Message | None) = findMessage(schema.message, fieldSplit(0)?)
+              match message'
+                | let message'' : Message =>
+                  if enumNameIsNestedEnumName(message''.enums,fieldSplit(1)?) then
+                    continue
+                  end
+              end
+            end
+            error
+          end
+        end
+      end
+    end
+    return schema
