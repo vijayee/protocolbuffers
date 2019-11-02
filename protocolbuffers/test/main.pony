@@ -68,7 +68,7 @@ class iso _TestTokens is UnitTest
       match CreateFile(path)
       | let file: File =>
           let text: String ref = recover ref file.read_string(file.size()) end
-          let tokens: Array[String] = Tokenize(text)
+          let tokens: Array[String ref] = Tokenize(text)
           var i : USize = 0
           if tokens.size() != testTokens.size() then
             t.fail("Invalid Token Count")

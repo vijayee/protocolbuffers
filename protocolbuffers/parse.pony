@@ -1,7 +1,8 @@
 use "collections"
+
 primitive IsPackableType
-  fun apply (type: String box) : Bool =>
-    match type
+  fun apply (ptype: String box) : Bool =>
+    match ptype
       | "int32" => true
       | "int64" => true
       | "uint32" => true
@@ -20,13 +21,14 @@ primitive IsPackableType
     end
 
 primitive RemoveQuotes
-  fun apply (text: String ref)? =>
-    while text(0)? == "\"" do
+  fun apply (text: String ref) ? =>
+    while text(0)? == '"' do
       text.delete(0)
     end
-    while text(text.size() - 1)? == "\"" do
-      text.delete(text.size() - 1)
+    while text(text.size() - 1)? == '"' do
+      text.delete(text.size().isize() - 1)
     end
+
 primitive ParsePackageName
   fun apply (tokens: Array[String ref]) : String ref ? =>
     tokens.shift()?
@@ -60,7 +62,7 @@ primitive ParseEnumValue
     end
     let name: String ref = tokens.shift()?
     tokens.shift()?
-    let value: Value = Value(tokens.shift()?.u64(), if tokens(0)? == "[" then ParseFieldOption(tokens)? else  OptionMap end)
+    let value: Value = Value(tokens.shift()?.u64()?, if tokens(0)? == "[" then ParseFieldOption(tokens)? else  OptionMap end)
     tokens.shift()?
     EnumValue(name, value)
 
@@ -77,7 +79,7 @@ primitive ParseEnum
     end
     tokens.shift()?
 
-    while tokens.size() > 0 then
+    while tokens.size() > 0 do
       if tokens(0)? == "}" then
         tokens.shift()?
         if tokens(0)? == ";" then
@@ -96,22 +98,22 @@ primitive ParseEnum
 
 primitive ParseOption
   fun apply(tokens: Array[String ref]) : (String ref, OptionType) ? =>
-    var name: (String ref | None) = None
-    var value: (OptionType | None) = None
-    let parse = {(text: String Ref) : (String ref | Bool) =>
+    var name: String ref = String(0)
+    var value: OptionType = None
+    let parse = {(text: String ref) : (String ref | Bool) ? =>
       if text == "true" then
         return true
       end
       if text == "false" then
         return false
       end
-      RemoveQuotes(text)
-      return text
+      RemoveQuotes(text)?
+      text
     }
-    while tokens.size() > 0 then
+    while tokens.size() > 0 do
       if tokens(0)? == ";" then
         tokens.shift()?
-        return (name', value')
+        return (name, value)
       end
 
       match tokens(0)?
@@ -124,43 +126,51 @@ primitive ParseOption
 
           name = tokens.shift()?
           if hasBracket then
-            if tokens(0)? != ')' then
+            if tokens(0)? != ")" then
               error
             end
             tokens.shift()?
 
-            if tokens(0)?(0)? == "." then
-              name = name + tokens.shift()?
+            if tokens(0)?(0)? == '.' then
+              name.append(tokens.shift()?)
             end
           end
         | "=" =>
           tokens.shift()?
-          if name == None then
+          if name == "" then
             error
           end
-          value = parse
-          tokens.shift()?)
-          if ((name == "optimize_for") and (value.contains("SPEED") || value.contains("CODE_SIZE")  || value.contains("LITE_RUNTIME"))) then
-            error
-          else if (value == "")
-            value = ParseOptionMap(tokens)
+          value = parse(tokens.shift()?)?
+          if name == "optimize_for" then
+            match value
+              | let value': String ref =>
+                if (value'.contains("SPEED") or value'.contains("CODE_SIZE") or value'.contains("LITE_RUNTIME")) then
+                  error
+                end
+            end
+          else
+            match value
+              | "{" =>
+                value = ParseOptionMap(tokens)?
+            end
           end
       else
         error
       end
     end
+    error
 
-primitive ParsOptionMap
+primitive ParseOptionMap
   fun apply(tokens: Array[String ref]) : OptionMap ? =>
-    let parse = {(text: String Ref) : (String ref | Bool) =>
+    let parse = {(text: String ref) : (String ref | Bool) ? =>
       if text == "true" then
         return true
       end
       if text == "false" then
         return false
       end
-      RemoveQuotes(text)
-      return text
+      RemoveQuotes(text)?
+      text
     }
     let map: OptionMap = OptionMap()
     while tokens.size() > 0 do
@@ -188,11 +198,11 @@ primitive ParsOptionMap
 
       match tokens(0)?
         | ":" =>
-          if  map.contains(key) then error end
+          if map.contains(key.clone()) then error end
           tokens.shift()?
-          value = parse(tokens.shift()?)
+          value = parse(tokens.shift()?)?
           match value
-            | let value': String =>
+            | let value': String ref=>
               if value' == "{" then
                 value = ParseOptionMap(tokens)?
               end
@@ -204,10 +214,10 @@ primitive ParsOptionMap
         | "{" =>
           tokens.shift()?
           value = ParseOptionMap(tokens)?
-          if not map.contains(key) then
+          if not map.contains(key.clone()) then
             map(key) = OptionArray()
           end
-          match map(key)
+          match map(key)?
             | let arr: OptionArray =>
               arr.push(value)
           else
@@ -224,11 +234,11 @@ primitive ParseImport
     tokens.shift()?
     let text: String ref = tokens.shift()?
 
-    if text(0)? == "\"" then
+    if text(0)? == '"' then
       text.delete(0)
     end
-    if text(text.size() - 1)? == "\"" then
-      text.delete(text.size() - 1)
+    if text(text.size() - 1)? == '"' then
+      text.delete(text.size().isize() - 1)
     end
 
     if tokens(0)? != ";" then
@@ -240,12 +250,12 @@ primitive ParseImport
 primitive ParseFieldOption
   fun apply (tokens: Array[String ref]) : OptionMap ? =>
     let options: OptionMap  = OptionMap
-    let process = {() =>
+    let process = {(tokens: Array[String ref], options: OptionMap) ? =>
       tokens.shift()?
-      let name: String ref = tokens.shift()?
+      var name: String ref = tokens.shift()?
 
       if name == "(" then
-        name = token.shift()?
+        name = tokens.shift()?
         tokens.shift()?
       end
 
@@ -259,11 +269,11 @@ primitive ParseFieldOption
         error
       end
       options(name) = tokens.shift()?
-    }
+    } ref
     while tokens.size() > 0 do
       match tokens(0)?
-        | "[" => process()
-        | "," => process()
+        | "[" => process(tokens, options)?
+        | "," => process(tokens, options)?
         | "]" =>
           tokens.shift()?
           return options
@@ -288,20 +298,20 @@ primitive ParseService
       if tokens(0)? == "}" then
         tokens.shift()?
         if tokens(0)? == ";" then
-          tokens,shift();
+          tokens.shift()?
         end
         return service
       end
 
       match tokens(0)?
         | "option" =>
-          var option: (String ref, OptionType) = ParseOption(tokens)
-          if service.options.contains(option._1) then
+          var option: (String ref, OptionType) = ParseOption(tokens)?
+          if service.options.contains(option._1.clone()) then
             error //Duplicate Option
           end
           service.options(option._1) = option._2
         | "rpc" =>
-          service.methods.push(ParseRPC(tokens))
+          service.methods.push(ParseRPC(tokens)?)
       else
         error //Unexpected token
       end
@@ -372,10 +382,10 @@ primitive ParseRPC
       end
       if tokens(0)? == "option" then
         var option: (String ref, OptionType) = ParseOption(tokens)?
-        if rpc.options.contains(option._1) then
+        if rpc.options.contains(option._1.clone()) then
           error
         end
-        rpc.options(option._1) = options._2
+        rpc.options(option._1) = option._2
       else
         error
       end
@@ -385,20 +395,20 @@ primitive ParseRPC
 primitive ParseField
   fun apply (tokens: Array[String ref]) : Field ? =>
     var field: Field = Field
-    let opional ={(tokens: Array[String ref]) ? =>
+    let optional ={(tokens: Array[String ref], field: Field) ? =>
       var token = tokens.shift()?
       field.required = (token == "required")
       field.required = (token == "repeated")
-      field.type = tokens.shift()?
+      field.typpe = tokens.shift()?
       field.name = tokens.shift()?
     }
     while tokens.size() > 0 do
       match tokens(0)?
         | "=" =>
           tokens.shift()?
-          field.tagg = tokens,shift()?.isize()?
+          field.tagg = tokens.shift()?.isize()?
         | "map" =>
-          field.type = token.shift()?
+          field.typpe = tokens.shift()?
           tokens.shift()?
 
           if tokens(0)? != "<" then
@@ -418,19 +428,19 @@ primitive ParseField
           end
           tokens.shift()?
           field.name = tokens.shift()?
-        | "repeated" => optional(tokens)?
-        | "required" => optional(tokens)?
-        | "optional" => optional(tokens)?
+        | "repeated" => optional(tokens, field)?
+        | "required" => optional(tokens, field)?
+        | "optional" => optional(tokens, field)?
         | "[" =>
-          field.options = ParseFieldOption(tokens)
+          field.options = ParseFieldOption(tokens)?
         | ";" =>
           if field.name == "" then
             error
           end
-          if field.type == "" then
+          if field.typpe == "" then
             error
           end
-          if field.tagg = -1 then
+          if field.tagg == -1 then
             error
           end
           tokens.shift()?
@@ -439,11 +449,12 @@ primitive ParseField
           error
       end
     end
+    error
 
 primitive ParseExtensions
   fun apply (tokens: Array[String ref]) : Extension ? =>
     tokens.shift()?
-    let from: ISize = tokens.shift()?.isize()
+    let from: ISize = tokens.shift()?.isize()?
     if tokens.shift()? != "to" then
       error
     end
@@ -453,7 +464,7 @@ primitive ParseExtensions
      error
     end
     tokens.shift()?
-    return Extension(from, to)
+    Extension(from, to)
 
 primitive ParseMessage
   fun apply (tokens: Array[String ref]) : Message ? =>
@@ -471,18 +482,18 @@ primitive ParseMessage
     while tokens.size() > 0 do
       if tokens(0)? == "{" then
         level = level + 1
-      else if tokens(0)? == "}" then
+      elseif tokens(0)? == "}" then
         level = level - 1
       end
 
       if level == 0 then
         tokens.shift()?
-        let body: MessageBody = ParseMessageBody(body)?
-        message.enums = body.enums
-        message.messages = body.messages
-        message.fields = body.fields
-        message.extends = body.extends
-        message.extensions = body.extensions
+        let body': MessageBody = ParseMessageBody(body)?
+        message.enums = body'.enums
+        message.messages = body'.messages
+        message.fields = body'.fields
+        message.extends = body'.extends
+        message.extensions = body'.extensions
         return message
       end
       body.push(tokens.shift()?)
@@ -493,7 +504,7 @@ primitive ParseMessageBody
   fun apply(tokens: Array[String ref]): MessageBody ? =>
     var body: MessageBody = MessageBody
 
-    while tokens.size() > 0 then
+    while tokens.size() > 0 do
        match tokens(0)?
         | "map" =>
           body.fields.push(ParseField(tokens)?)
@@ -508,7 +519,7 @@ primitive ParseMessageBody
         | "message" =>
           body.messages.push(ParseMessage(tokens)?)
         | "extensions" =>
-          body.extensions.push(ParseExtensions(tokens)?)
+          body.extensions = ParseExtensions(tokens)?
         | "oneof" =>
           tokens.shift()?
           var name: String ref = tokens.shift()?
@@ -517,8 +528,8 @@ primitive ParseMessageBody
           end
           tokens.shift()?
 
-          while tokens(0)? == "}" then
-            tokens.unshift("optional")
+          while tokens(0)? == "}" do
+            tokens.unshift(String(8).>append("optional"))
             var field: Field = ParseField(tokens)?
             field.oneof = name
             body.fields.push(field)
@@ -527,35 +538,35 @@ primitive ParseMessageBody
         | "extend" =>
           body.extends.push(ParseExtend(tokens)?)
         | ";" =>
-          tokefun apply(tokens: Array[String ref]): MessageBody ? =>ns.shift()?
+          tokens.shift()?
         | "reserved" =>
           tokens.shift()?
-          while tokens(0) != ";" then
+          while tokens(0)? != ";" do
             tokens.shift()?
           end
         | "option" =>
           tokens.shift()?
-          while tokens(0) != ";" then
+          while tokens(0)? != ";" do
             tokens.shift()?
           end
        else
-         tokens.unshift("optional")
-         body.fields.push(ParseFiel(tokens)?)
+         tokens.unshift(String(8).>append("optional"))
+         body.fields.push(ParseField(tokens)?)
        end
     end
-    return body
+    body
 
 primitive ParseExtend
   fun apply(tokens: Array[String ref]): Extend ? =>
-    return Extend(tokens(1)?, ParseMessage(tokens)?)
+    Extend(tokens(1)?, ParseMessage(tokens)?)
 
 primitive ContainsQuote
   fun apply (text: String box) : Bool ? =>
     if text.size() == 0 then
       return false
     end
-    if ((text(0)? == "\"") or (text(0)? == "''))
-      and (try ((text(1)? !="\"") and (text(1)? != "\'")) else false end) then
+    if (((text(0)? == '"') or (text(0)? == '\''))
+      and (try (text(1)? != '"') and (text(1)? != '\'') else false end)) then
         return true
     end
     false
@@ -566,17 +577,18 @@ primitive Parse
     var i: USize = 0
 
     while i < tokens.size() do
-      if ContainsQuotes(tokens(i)?)? then
+      if ContainsQuote(tokens(i)?)? then
         var j: USize = if tokens(i)?.size() == 1 then i + 1 else i end
 
         while j < tokens.size() do
           if ContainsQuote(tokens(j)?)? then
-            var collapse: String ref = ""
+            var collapse: String ref = String
             for k in Range(i, j + 1) do
-              collapse = collapse + tokens(k)?
+              collapse.append(tokens(k)?)
             end
-            var tokens2: Array[String ref] = tokens.slice(0, i).push(collapse)
-            tokens2.append(tokens, j + 1, tokens.size())
+            var tokens2: Array[String ref] = tokens.slice(0, i)
+            tokens2.push(collapse)
+            tokens2.concat(tokens.values(), j + 1, tokens.size())
             tokens = tokens2
             break
           end
@@ -593,24 +605,24 @@ primitive Parse
         | "package" =>
           schema.package = ParsePackageName(tokens)?
         | "syntax" =>
-          if not firstLine then
+          if firstLine == false then
             error
           end
-          schema.syntax = ParseVersion(tokens)?
+          schema.version = ParseVersion(tokens)?
         | "message" =>
           schema.messages.push(ParseMessage(tokens)?)
         | "enum" =>
           schema.enums.push(ParseEnum(tokens)?)
-        | "option"
+        | "option" =>
             var option : (String ref, OptionType) = ParseOption(tokens)?
-            if schema.options.contains(option._1) then
+            if schema.options.contains(option._1.clone()) then
               error
             end
             schema.options(option._1) = option._2
         | "import" =>
           schema.extends.push(ParseExtend(tokens)?)
         | "service" =>
-          schema.services.push(ParseService(tokens))
+          schema.services.push(ParseService(tokens)?)
       else
         error
       end
@@ -622,7 +634,7 @@ primitive Parse
         if message.name == extend.name then
           for field in extend.message.fields.values() do
             if (message.extensions.to == -1) or (message.extensions.from == -1)
-              or (field.tagg < message.extension.from) or (field.tag > message.extensions.to) then
+              or (field.tagg < message.extensions.from) or (field.tagg > message.extensions.to) then
                 error
             end
             message.fields.push(field)
@@ -630,15 +642,17 @@ primitive Parse
         end
       end
     end
-    let enumNameIsFieldType = {(enums: Array[Enums], field: Field): Bool =>
+
+    let enumNameIsFieldType = {(enums: Array[Enum], field: Field): Bool =>
       for enum in enums.values() do
-        if enum.name == field.type then
+        if enum.name == field.typpe then
           return true
         end
       end
       false
     } val
-    let findMessage = {(messages: Array[Messages], messagName: String ref) (Message | None) =>
+
+    let findMessage = {(messages: Array[Message], messageName: String box): (Message | None) =>
       for message in messages.values() do
         if message.name == messageName then
           return message
@@ -646,7 +660,8 @@ primitive Parse
       end
       None
     } val
-    let enumNameIsNestedEnumName: = {(enums: Array[Enums], nestedEnumName: String ref): Bool =>
+
+    let enumNameIsNestedEnumName = {(enums: Array[Enum], nestedEnumName: String box): Bool =>
       for enum in enums.values() do
         if enum.name == nestedEnumName then
           return true
@@ -656,21 +671,21 @@ primitive Parse
     } val
     for message in schema.messages.values() do
       for field in message.fields.values() do
-        if try field.options("packed")? == true else false end then
-          if IsPackableType(field.type) then
-            if not field.type.contains(".") then
+        if try field.options(String(6).>append("packed"))? as Bool == true else false end then
+          if IsPackableType(field.typpe) then
+            if not field.typpe.contains(".") then
               if enumNameIsFieldType(message.enums, field) then
                 continue
               end
             else
-              var fieldSplit: Array[String ref] = field.type.split(".")
+              var fieldSplit: Array[String] = field.typpe.split(".")
               if fieldSplit.size() > 2 then
                 error
               end
-              let message': (Message | None) = findMessage(schema.message, fieldSplit(0)?)
+              let message': (Message | None) = findMessage(schema.messages, fieldSplit(0)?)
               match message'
                 | let message'' : Message =>
-                  if enumNameIsNestedEnumName(message''.enums,fieldSplit(1)?) then
+                  if enumNameIsNestedEnumName(message''.enums, fieldSplit(1)?) then
                     continue
                   end
               end
@@ -680,4 +695,4 @@ primitive Parse
         end
       end
     end
-    return schema
+    schema

@@ -1,7 +1,7 @@
 use "ponytest"
 
 primitive Tokenize
-  fun apply(text: String ref): Array[String] =>
+  fun apply(text: String ref): Array[String ref] =>
     //([;,{}()=:[\]<>]|\/\*|\*\/)
     let list: Array[String] = [
       ";"
@@ -55,7 +55,7 @@ primitive Tokenize
       text2.append(line)
     end
     let lines2: Array[String] = text2.split(" \n")
-    let tokens: Array[String] = Array[String](lines2.size())
+    let tokens: Array[String ref] = Array[String ref](lines2.size())
     var inside: Bool = false
     for line in lines2.values() do
       if line == "/*" then
@@ -68,7 +68,7 @@ primitive Tokenize
         continue
       end
       if inside == false then
-        tokens.push(line)
+        tokens.push(line.clone())
       end
     end
     tokens

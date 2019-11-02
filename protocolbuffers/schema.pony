@@ -10,7 +10,7 @@ class Schema
   var extends: Array[Extend]
   var services: Array[Service]
 
-  new create(package': String ref = String, version': USize = 3, imports': Array[String ref] = Array[String ref], enums': Array[Enum] = Array[Enum], messages': Array[Message] = Array[Message], options': OptionMap = OptionMap, extends': Array[Extend] = Array[Extend], services': Array[Services] = Array[Services]) =>
+  new create(package': String ref = String, version': USize = 3, imports': Array[String ref] = Array[String ref], enums': Array[Enum] = Array[Enum], messages': Array[Message] = Array[Message], options': OptionMap = OptionMap, extends': Array[Extend] = Array[Extend], services': Array[Service] = Array[Service]) =>
     package = package'
     version = version'
     imports = imports'
@@ -29,7 +29,7 @@ class EnumValue
     value = value'
 
 class Enum
-  var name: Sring ref
+  var name: String ref
   var options: OptionMap
   var value: OptionMap
 
@@ -41,7 +41,7 @@ class Enum
 class Value
   var value: U64
   var options: OptionMap
-  new create (value': U64, options': OptionMap = OptionMap]) =>
+  new create (value': U64, options': OptionMap = OptionMap) =>
     value = value'
     options = options'
 
@@ -50,21 +50,21 @@ type OptionType is (F64 | I64 | Bool | None | String ref | OptionMap | OptionArr
 class OptionMap
   var data: Map[String ref, OptionType]
   new create (size: USize = 0) =>
-    data = Map[String, OptionType](size)
+    data = Map[String ref, OptionType](size)
   fun apply(key: String ref): this->OptionType ? =>
     data(key)?
   fun ref update(key: String ref, value: OptionType): (OptionType^ | None) =>
     data(key) = value
-  fun contains(key: box->String!) : Bool
+  fun contains(key: box->String!) : Bool =>
     data.contains(key)
 
 class OptionArray
   var data: Array[OptionType]
-  new create(size: USize = 0) =?
-    data = new Array[OptionType](size)
+  new create(size: USize = 0) =>
+    data = Array[OptionType](size)
   fun apply(i: USize) : this->OptionType ? =>
     data(i)?
-  fun ref update(i:USize, value: OptionType) (OptionType^ | None) ? =>
+  fun ref update(i:USize, value: OptionType): (OptionType^ | None) ? =>
     data(i)? = value
   fun ref push(value: OptionType) =>
     data.push(value)
@@ -73,7 +73,7 @@ class Service
   var name: String ref
   var methods: Array[RPC]
   var options: OptionMap
-  new create(name': String ref = String, methods': Array[RPC] = Array[RPC], options' = OptionMap) =>
+  new create(name': String ref = String, methods': Array[RPC] = Array[RPC], options': OptionMap = OptionMap) =>
     name = name'
     methods = methods'
     options = options'
@@ -85,7 +85,7 @@ class RPC
   var clientStreaming: Bool
   var serverStreaming: Bool
   var options: OptionMap
-  new create(name': String ref = String, inputType': (String ref | None) = None, outputType': (String ref | None) = None, clientStreaming': Bool = false, serverStreaming': Bool = false, options: OptionMap = OptionMap) =>
+  new create(name': String ref = String, inputType': (String ref | None) = None, outputType': (String ref | None) = None, clientStreaming': Bool = false, serverStreaming': Bool = false, options': OptionMap = OptionMap) =>
       name = name'
       inputType = inputType'
       outputType = outputType'
@@ -109,19 +109,21 @@ class Extension
 
 class Field
   var name: String ref
-  var type: String ref
+  var typpe: String ref
   var tagg: ISize
   var map: FieldMap
-  var required: false
-  var repeated: false
+  var oneof: String ref
+  var required: Bool
+  var repeated: Bool
   var options: OptionMap
 
-  new create(name': String ref = String, type': String ref = String, tagg': ISize = -1, map': FieldMap = FieldMap, required': Bool = false, repeated': false, options': OptionMap) =>
+  new create(name': String ref = String, typpe': String ref = String, tagg': ISize = -1, map': FieldMap = FieldMap, oneof': String ref = String, required': Bool = false, repeated': Bool = false, options': OptionMap = OptionMap) =>
     name = name'
-    type = type'
+    typpe = typpe'
     tagg = tagg'
     map = map'
-    reqired = required'
+    oneof = oneof'
+    required = required'
     repeated = repeated'
     options = options'
 
@@ -132,12 +134,13 @@ class Message
   var messages: Array[Message]
   var fields: Array[Field]
   var extensions: Extension
-  new create(name': String ref = String, enums': Array[Enum] = Array[Enum](0), extends': Array[Extend] = Array[Extend](0), messages': Array[Message]= Array[Message](0), fields': Array[Field] = Array[Field](0), extensions: Extension = Extension) =>
+  new create(name': String ref = String, enums': Array[Enum] = Array[Enum](0), extends': Array[Extend] = Array[Extend](0), messages': Array[Message]= Array[Message](0), fields': Array[Field] = Array[Field](0), extensions': Extension = Extension) =>
     name = name'
     enums = enums'
     extends = extends'
     messages = messages'
     fields = fields'
+    extensions = extensions'
 
 class Extend
   var name: String ref
@@ -157,4 +160,4 @@ class MessageBody
     messages = messages'
     fields = fields'
     extends = extends'
-    extendsions = extensions'
+    extensions = extensions'
