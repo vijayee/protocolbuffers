@@ -1,4 +1,5 @@
 use "collections"
+use "logger"
 
 primitive IsPackableType
   fun apply (ptype: String box) : Bool =>
@@ -30,44 +31,54 @@ primitive RemoveQuotes
     end
 
 primitive ParsePackageName
-  fun apply (tokens: Array[String ref]) : String ref ? =>
+  fun apply (tokens: Array[String ref], log: Logger[String]) : String ref ? =>
     tokens.shift()?
     let packageName: String ref = tokens.shift()?
     if tokens(0)? != ";" then
+      log(Error) and log.log("""Expected ';' but found '""" + tokens(0)?.string() +"""'""")
       error
     end
     tokens.shift()?
     packageName
 
 primitive ParseVersion
-  fun apply (tokens: Array[String ref]) : USize ? =>
+  fun apply (tokens: Array[String ref], log: Logger[String]) : USize ? =>
     var version: String ref = tokens.shift()?
+    if tokens(0)? != ";" then
+      log(Error) and log.log("""Expected ';' but found '""" + tokens(0)?.string() + """'""")
+      error
+    end
+    tokens.shift()?
     match version
       | """"proto2"""" => USize(2)
       | """"proto3"""" => USize(3)
     else
+      log(Error) and log.log("""Invalid syntax version '""" + version.string() + """'""")
       error
     end
 
 primitive ParseEnumValue
-  fun apply (tokens: Array[String ref]) : EnumValue ? =>
+  fun apply (tokens: Array[String ref], log: Logger[String]) : EnumValue ? =>
     if tokens.size() < 4 then
+      log(Error) and log.log("""Invalid enum value""")
       error
     end
-    if tokens(1)? == "=" then
+    if tokens(1)? != "=" then
+      log(Error) and log.log("""Expected '=' but found '""" + tokens(1)?.string() + """'""")
       error
     end
     if (tokens(3)? != ";") and (tokens(3)? != "[")  then
+      log(Error) and log.log("""Expected ';' or '[' but found '""" + tokens(1)?.string() + """'""")
       error
     end
     let name: String ref = tokens.shift()?
     tokens.shift()?
-    let value: Value = Value(tokens.shift()?.u64()?, if tokens(0)? == "[" then ParseFieldOption(tokens)? else  OptionMap end)
+    let value: Value = Value(tokens.shift()?.u64()?, if tokens(0)? == "[" then ParseFieldOption(tokens, log)? else  OptionMap end)
     tokens.shift()?
     EnumValue(name, value)
 
 primitive ParseEnum
-  fun apply (tokens: Array[String ref]) : Enum ? =>
+  fun apply (tokens: Array[String ref], log: Logger[String]) : Enum ? =>
     tokens.shift()?
     let options: OptionMap = OptionMap
     let name: String ref = tokens.shift()?
@@ -75,6 +86,7 @@ primitive ParseEnum
     let enum: Enum = Enum(name, options, value)
 
     if tokens(0)? != "{" then
+      log(Error) and log.log("""Expected '{' but found '""" + tokens(0)?.string() +"""'""")
        error
     end
     tokens.shift()?
@@ -89,15 +101,16 @@ primitive ParseEnum
       end
 
       if tokens(0)? == "option" then
-        let option: (String ref, OptionType) = ParseOption(tokens)?
+        let option: (String ref, OptionType) = ParseOption(tokens, log)?
         enum.options(option._1) = option._2
         continue
       end
     end
-    error // no closing tag
+    log(Error) and log.log("No closing tag for enum")
+    error
 
 primitive ParseOption
-  fun apply(tokens: Array[String ref]) : (String ref, OptionType) ? =>
+  fun apply(tokens: Array[String ref], log: Logger[String]) : (String ref, OptionType) ? =>
     var name: String ref = String(0)
     var value: OptionType = None
     let parse = {(text: String ref) : (String ref | Bool) ? =>
@@ -127,6 +140,7 @@ primitive ParseOption
           name = tokens.shift()?
           if hasBracket then
             if tokens(0)? != ")" then
+              log(Error) and log.log("""Expected ')' but found '""" + tokens(0)?.string() + """'""")
               error
             end
             tokens.shift()?
@@ -138,6 +152,7 @@ primitive ParseOption
         | "=" =>
           tokens.shift()?
           if name == "" then
+            log(Error) and log.log("Expected key for option with value: " + tokens(0)?.string())
             error
           end
           value = parse(tokens.shift()?)?
@@ -145,23 +160,26 @@ primitive ParseOption
             match value
               | let value': String ref =>
                 if (value'.contains("SPEED") or value'.contains("CODE_SIZE") or value'.contains("LITE_RUNTIME")) then
+                  log(Error) and log.log("Unexpected value for option optimize_for: " + value'.string())
                   error
                 end
             end
           else
             match value
               | "{" =>
-                value = ParseOptionMap(tokens)?
+                value = ParseOptionMap(tokens, log)?
             end
           end
       else
+        log(Error) and log.log("Unexpected token in option: " + tokens(0)?.string())
         error
       end
     end
+    log(Error) and log.log("Missing ';' in option")
     error
 
 primitive ParseOptionMap
-  fun apply(tokens: Array[String ref]) : OptionMap ? =>
+  fun apply(tokens: Array[String ref], log: Logger[String]) : OptionMap ? =>
     let parse = {(text: String ref) : (String ref | Bool) ? =>
       if text == "true" then
         return true
@@ -186,25 +204,27 @@ primitive ParseOptionMap
       let key: String ref = tokens.shift()?
 
       if hasBracket then
-        if tokens(0)? == ")" then
+        if tokens(0)? != ")" then
+          log(Error) and log.log("""Expected ')' but found '""" + tokens(0)?.string() + """"'""")
           error
         end
-
         tokens.shift()?
-
       end
 
       var value: OptionType = None
 
       match tokens(0)?
         | ":" =>
-          if map.contains(key.clone()) then error end
+          if map.contains(key.clone()) then
+            log(Error) and log.log("Unexpected token in option: " + tokens(0)?.string())
+            error
+          end
           tokens.shift()?
           value = parse(tokens.shift()?)?
           match value
             | let value': String ref=>
               if value' == "{" then
-                value = ParseOptionMap(tokens)?
+                value = ParseOptionMap(tokens, log)?
               end
           end
           map(key) = value
@@ -213,7 +233,7 @@ primitive ParseOptionMap
           end
         | "{" =>
           tokens.shift()?
-          value = ParseOptionMap(tokens)?
+          value = ParseOptionMap(tokens, log)?
           if not map.contains(key.clone()) then
             map(key) = OptionArray()
           end
@@ -221,16 +241,19 @@ primitive ParseOptionMap
             | let arr: OptionArray =>
               arr.push(value)
           else
+            log(Error) and log.log("Duplicate option map key: " + tokens(0)?.string())
             error
           end
       else
+        log(Error) and log.log("Unexpected token in option: " + tokens(0)?.string())
         error
       end
     end
+    log(Error) and log.log("Unexpected token in option map: " + tokens(0)?.string())
     error
 
 primitive ParseImport
-  fun apply (tokens: Array[String ref]) : String ref ? =>
+  fun apply (tokens: Array[String ref], log: Logger[String]) : String ref ? =>
     tokens.shift()?
     let text: String ref = tokens.shift()?
 
@@ -242,15 +265,16 @@ primitive ParseImport
     end
 
     if tokens(0)? != ";" then
+      log(Error) and log.log("Unexpected token: " + tokens(0)?.string() + ". Expected ';'")
       error
     end
     tokens.shift()?
     text
 
 primitive ParseFieldOption
-  fun apply (tokens: Array[String ref]) : OptionMap ? =>
+  fun apply (tokens: Array[String ref], log: Logger[String]) : OptionMap ? =>
     let options: OptionMap  = OptionMap
-    let process = {(tokens: Array[String ref], options: OptionMap) ? =>
+    let process = {(tokens: Array[String ref], options: OptionMap, log: Logger[String]) ? =>
       tokens.shift()?
       var name: String ref = tokens.shift()?
 
@@ -260,36 +284,41 @@ primitive ParseFieldOption
       end
 
       if tokens(0)? != "=" then
+        log(Error) and log.log("Unexpected token in field options: " + tokens(0)?.string())
         error
       end
 
       tokens.shift()?
 
       if tokens(0)? == "]" then
+        log(Error) and log.log("Unexpected token ']' in field option")
         error
       end
       options(name) = tokens.shift()?
     } ref
     while tokens.size() > 0 do
       match tokens(0)?
-        | "[" => process(tokens, options)?
-        | "," => process(tokens, options)?
+        | "[" => process(tokens, options, log)?
+        | "," => process(tokens, options, log)?
         | "]" =>
           tokens.shift()?
           return options
         else
+          log(Error) and log.log("Unexpected token in field options: " + tokens(0)?.string())
           error
       end
     end
+    log(Error) and log.log("No closing tag for field options")
     error
 
 primitive ParseService
-  fun apply (tokens: Array[String ref]) : Service ? =>
+  fun apply (tokens: Array[String ref], log: Logger[String]) : Service ? =>
     tokens.shift()?
 
     let service: Service = Service
 
     if tokens(0)? != "{" then
+      log(Error) and log.log("""Expected '{' but found '""" + tokens(0)?.string() +"""'""")
       error
     end
     tokens.shift()?
@@ -305,25 +334,29 @@ primitive ParseService
 
       match tokens(0)?
         | "option" =>
-          var option: (String ref, OptionType) = ParseOption(tokens)?
+          var option: (String ref, OptionType) = ParseOption(tokens, log)?
           if service.options.contains(option._1.clone()) then
+            log(Error) and log.log("""Duplicate option '""" + option._1.string() + """'""")
             error //Duplicate Option
           end
           service.options(option._1) = option._2
         | "rpc" =>
-          service.methods.push(ParseRPC(tokens)?)
+          service.methods.push(ParseRPC(tokens, log)?)
       else
+        log(Error) and log.log("Unexpected token in service: " + tokens(0)?.string())
         error //Unexpected token
       end
     end
+    log(Error) and log.log("No closing tag for Service")
     error // No Closing Tag
 
 primitive ParseRPC
-  fun apply (tokens: Array[String ref]) : RPC ? =>
+  fun apply (tokens: Array[String ref], log: Logger[String]) : RPC ? =>
     tokens.shift()?
 
     var rpc = RPC()
     if tokens.shift()? != "(" then
+      log(Error) and log.log("""Expected '(' but found """ + tokens(0)?.string())
       error
     end
     tokens.shift()?
@@ -336,16 +369,19 @@ primitive ParseRPC
     rpc.inputType = tokens.shift()?
 
     if tokens(0)? != ")" then
+      log(Error) and log.log("Expected ') but found " + tokens(0)?.string())
       error
     end
     tokens.shift()?
 
-    if tokens(0)? != "return" then
+    if tokens(0)? != "returns" then
+      log(Error) and log.log("Expected returns but found " + tokens(0)?.string())
       error
     end
     tokens.shift()?
 
     if tokens(0)? != "("then
+      log(Error) and log.log("""Expected '(' but found """ + tokens(0)?.string())
       error
     end
     tokens.shift()?
@@ -358,6 +394,7 @@ primitive ParseRPC
     rpc.outputType = tokens.shift()?
 
     if tokens(0)? != ")" then
+      log(Error) and log.log("""Expected '{' but found '""" + tokens(0)?.string() +"""'""")
       error
     end
     tokens.shift()?
@@ -368,6 +405,7 @@ primitive ParseRPC
     end
 
     if tokens(0)? != "{" then
+      log(Error) and log.log("""Expected '{' but found '""" + tokens(0)?.string() + """'""")
       error
     end
     tokens.shift()?
@@ -381,19 +419,22 @@ primitive ParseRPC
         return rpc
       end
       if tokens(0)? == "option" then
-        var option: (String ref, OptionType) = ParseOption(tokens)?
+        var option: (String ref, OptionType) = ParseOption(tokens, log)?
         if rpc.options.contains(option._1.clone()) then
+          log(Error) and log.log("""Duplicate option '""" + tokens(0)?.string() + """'""")
           error
         end
         rpc.options(option._1) = option._2
       else
+        log(Error) and log.log("""Unexpected token '""" + tokens(0)?.string() + """' in rpc options """)
         error
       end
     end
+    log(Error) and log.log("Unexpected token in rpc options: " + tokens(0)?.string())
     error
 
 primitive ParseField
-  fun apply (tokens: Array[String ref]) : Field ? =>
+  fun apply (tokens: Array[String ref], log: Logger[String]) : Field ? =>
     var field: Field = Field
     let optional ={(tokens: Array[String ref], field: Field) ? =>
       var token = tokens.shift()?
@@ -412,18 +453,21 @@ primitive ParseField
           tokens.shift()?
 
           if tokens(0)? != "<" then
+            log(Error) and log.log("Unexpected token in map type '" +  tokens(0)?.string() + " expected '<'")
             error
           end
           tokens.shift()?
           field.map.from = tokens.shift()?
 
           if tokens(0)? != "," then
+            log(Error) and log.log("""Unexpected token in map type '""" +  tokens(0)?.string() + """' expected ','""")
             error
           end
           tokens.shift()?
           field.map.to = tokens.shift()?
 
           if tokens(0)? != ">" then
+            log(Error) and log.log("""Unexpected token in map type '""" +  tokens(0)?.string() + """ '>'""")
             error
           end
           tokens.shift()?
@@ -432,48 +476,72 @@ primitive ParseField
         | "required" => optional(tokens, field)?
         | "optional" => optional(tokens, field)?
         | "[" =>
-          field.options = ParseFieldOption(tokens)?
+          field.options = ParseFieldOption(tokens, log)?
         | ";" =>
           if field.name == "" then
+            log(Error) and log.log("Missing Field Name")
             error
           end
           if field.typpe == "" then
+            log(Error) and log.log("Missing type in message field: " + field.name)
             error
           end
           if field.tagg == -1 then
+            log(Error) and log.log("Missing tag number in message field")
             error
           end
           tokens.shift()?
           return field
       else
-          error
+        log(Error) and log.log("""No ';' for message field""")
+        error
       end
     end
+    log(Error) and log.log("""Missing found ';' field""")
     error
 
 primitive ParseExtensions
-  fun apply (tokens: Array[String ref]) : Extension ? =>
+  fun apply (tokens: Array[String ref], log: Logger[String]) : Extension ? =>
     tokens.shift()?
-    let from: ISize = tokens.shift()?.isize()?
+    let from: ISize = try
+      tokens.shift()?.isize()?
+    else
+      log(Error) and log.log("""Invalid 'from' in extensions definition""")
+      error
+    end
     if tokens.shift()? != "to" then
+      log(Error) and log.log("""Expected keyword 'to' in extensions definition""")
       error
     end
 
-    let to: ISize = if tokens(0)? == "max" then ISize.max_value() else tokens.shift()?.isize()? end
-    if tokens(0)? != ";" then
-     error
+    let to: ISize = if tokens(0)? == "max" then
+      ISize.max_value()
+    else
+      try
+        tokens.shift()?.isize()?
+      else
+        log(Error) and log.log("""Invalid 'to' in extensions definition""")
+        error
+      end
     end
-    tokens.shift()?
+    if tokens(0)? != ";" then
+      log(Error) and log.log("Missing Field Name")
+      error
+    end
+    if (tokens.shift()? != ";") then
+      log(Error) and log.log("""Missing ';' in extensions definition""")
+    end
     Extension(from, to)
 
 primitive ParseMessage
-  fun apply (tokens: Array[String ref]) : Message ? =>
+  fun apply (tokens: Array[String ref], log: Logger[String]) : Message ? =>
     tokens.shift()?
     var level: USize = 1
     var body: Array[String ref] = Array[String ref] (1)
     var message: Message = Message
 
     if tokens(0)? != "{" then
+      log(Error) and log.log("""Expected '{' but found '""" + tokens(0)?.string() +"""'""")
       error
     end
 
@@ -488,7 +556,7 @@ primitive ParseMessage
 
       if level == 0 then
         tokens.shift()?
-        let body': MessageBody = ParseMessageBody(body)?
+        let body': MessageBody = ParseMessageBody(body, log)?
         message.enums = body'.enums
         message.messages = body'.messages
         message.fields = body'.fields
@@ -498,45 +566,47 @@ primitive ParseMessage
       end
       body.push(tokens.shift()?)
     end
+    log(Error) and log.log("""No closing tag for message""")
     error
 
 primitive ParseMessageBody
-  fun apply(tokens: Array[String ref]): MessageBody ? =>
+  fun apply(tokens: Array[String ref], log: Logger[String]): MessageBody ? =>
     var body: MessageBody = MessageBody
 
     while tokens.size() > 0 do
        match tokens(0)?
         | "map" =>
-          body.fields.push(ParseField(tokens)?)
+          body.fields.push(ParseField(tokens, log)?)
         | "repeated" =>
-          body.fields.push(ParseField(tokens)?)
+          body.fields.push(ParseField(tokens, log)?)
         | "optional" =>
-          body.fields.push(ParseField(tokens)?)
+          body.fields.push(ParseField(tokens, log)?)
         | "required" =>
-          body.fields.push(ParseField(tokens)?)
+          body.fields.push(ParseField(tokens, log)?)
         | "enum" =>
-          body.enums.push(ParseEnum(tokens)?)
+          body.enums.push(ParseEnum(tokens, log)?)
         | "message" =>
-          body.messages.push(ParseMessage(tokens)?)
+          body.messages.push(ParseMessage(tokens, log)?)
         | "extensions" =>
-          body.extensions = ParseExtensions(tokens)?
+          body.extensions = ParseExtensions(tokens, log)?
         | "oneof" =>
           tokens.shift()?
           var name: String ref = tokens.shift()?
           if tokens(0)? != "{" then
+            log(Error) and log.log("Unexpected token in oneof: " + tokens(0)?.string())
             error
           end
           tokens.shift()?
 
           while tokens(0)? == "}" do
             tokens.unshift(String(8).>append("optional"))
-            var field: Field = ParseField(tokens)?
+            var field: Field = ParseField(tokens, log)?
             field.oneof = name
             body.fields.push(field)
           end
           tokens.shift()?
         | "extend" =>
-          body.extends.push(ParseExtend(tokens)?)
+          body.extends.push(ParseExtend(tokens, log)?)
         | ";" =>
           tokens.shift()?
         | "reserved" =>
@@ -551,14 +621,14 @@ primitive ParseMessageBody
           end
        else
          tokens.unshift(String(8).>append("optional"))
-         body.fields.push(ParseField(tokens)?)
+         body.fields.push(ParseField(tokens, log)?)
        end
     end
     body
 
 primitive ParseExtend
-  fun apply(tokens: Array[String ref]): Extend ? =>
-    Extend(tokens(1)?, ParseMessage(tokens)?)
+  fun apply(tokens: Array[String ref], log: Logger[String]): Extend ? =>
+    Extend(tokens(1)?, ParseMessage(tokens, log)?)
 
 primitive ContainsQuote
   fun apply (text: String box) : Bool ? =>
@@ -572,7 +642,7 @@ primitive ContainsQuote
     false
 
 primitive Parse
-  fun apply (text: String ref): Schema ? =>
+  fun apply (text: String ref, log: Logger[String]): Schema ? =>
     var tokens: Array[String ref] = Tokenize(text)
     var i: USize = 0
 
@@ -603,27 +673,30 @@ primitive Parse
     while tokens.size() > 0 do
       match tokens(0)?
         | "package" =>
-          schema.package = ParsePackageName(tokens)?
+          schema.package = ParsePackageName(tokens, log)?
         | "syntax" =>
           if firstLine == false then
+            log(Error) and log.log("Syntax version must be the first line of file")
             error
           end
-          schema.version = ParseVersion(tokens)?
+          schema.version = ParseVersion(tokens, log)?
         | "message" =>
-          schema.messages.push(ParseMessage(tokens)?)
+          schema.messages.push(ParseMessage(tokens, log)?)
         | "enum" =>
-          schema.enums.push(ParseEnum(tokens)?)
+          schema.enums.push(ParseEnum(tokens, log)?)
         | "option" =>
-            var option : (String ref, OptionType) = ParseOption(tokens)?
+            var option : (String ref, OptionType) = ParseOption(tokens, log)?
             if schema.options.contains(option._1.clone()) then
+              log(Error) and log.log("Duplicate Option: " + option._1.string())
               error
             end
             schema.options(option._1) = option._2
         | "import" =>
-          schema.extends.push(ParseExtend(tokens)?)
+          schema.extends.push(ParseExtend(tokens, log)?)
         | "service" =>
-          schema.services.push(ParseService(tokens)?)
+          schema.services.push(ParseService(tokens, log)?)
       else
+        log(Error) and log.log("Unexpected Token: " + tokens(0)?.string())
         error
       end
       firstLine = false
@@ -635,6 +708,7 @@ primitive Parse
           for field in extend.message.fields.values() do
             if (message.extensions.to == -1) or (message.extensions.from == -1)
               or (field.tagg < message.extensions.from) or (field.tagg > message.extensions.to) then
+                log(Error) and log.log(message.name.string() + " does not delcare " + field.tagg.string() + " as an extension number")
                 error
             end
             message.fields.push(field)
@@ -680,6 +754,7 @@ primitive Parse
             else
               var fieldSplit: Array[String] = field.typpe.split(".")
               if fieldSplit.size() > 2 then
+                log(Error) and log.log("Poorly formed type: " + field.typpe.string())
                 error
               end
               let message': (Message | None) = findMessage(schema.messages, fieldSplit(0)?)
@@ -690,6 +765,10 @@ primitive Parse
                   end
               end
             end
+            log(Error) and log.log("Fields of type " + field.typpe.string() + " cannot be declared [packed=true]. " +
+            "Only repeated fields of primitive numeric types (types which use " +
+            "the varint, 32-bit, or 64-bit wire types) can be declared 'packed'. " +
+            "See https://developers.google.com/protocol-buffers/docs/encoding#optional")
             error
           end
         end
