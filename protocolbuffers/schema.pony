@@ -1,4 +1,5 @@
 use "collections"
+use "json"
 
 class Schema
   var package: String ref
@@ -19,6 +20,38 @@ class Schema
     options = options'
     extends = extends'
     services = services'
+fun json() : JsonObject =>
+  let json': JsonObject = JsonObject
+  json'.data("package") = package.string()
+  json'.data("version") = version.f64()
+  let importArr: Array[JsonType] = Array[JsonType](imports.size())
+  for import in imports.values() do
+    importArr.push(import.json())
+  end
+  json'.data("imports") = JsonArray.from_array(importArr)
+  let enumArr: Array[JsonType] = Array[JsonType](enums.size())
+  for enum in enums.values() do
+    enumArr.push(enum.json())
+  end
+  json'.data("enum") = JsonArray.from_array(enumArr)
+  let messageArr: Array[JsonType] = Array[JsonType](messages.size())
+  for message in messages.values() do
+    messageArr.push(message.json())
+  end
+  json'.data("messages") = JsonArray.from_array(messageArr)
+  json'.data("options") = options.json()
+  let extendArr: Array[JsonType] = Array[JsonType](extends.size())
+  for extend in extends.values() do
+    extendArr.push(extends.json())
+  end
+  json'.data("extends") = JsonArray.from_array(extendArr)
+  let serviceArr: Array[JsonType] = Array[JsonType](services.size())
+  for service in services.values() do
+    serviceArr.push(services.json())
+  end
+  json'.data("services") = JsonArray.from_array(serviceArr)
+  json'
+
 
 class EnumValue
   var name: String ref
@@ -38,6 +71,13 @@ class Enum
     options = options'
     value = value'
 
+  fun json(): JsonObject =>
+    let json': JsonObject = JsonObject
+     json'.data("name") = name.string()
+     json'.data("options") = options.json()
+     json'.data("value") = value.json()
+     json'
+
 class Value
   var value: U64
   var options: OptionMap
@@ -47,6 +87,37 @@ class Value
 
 type OptionType is (F64 | I64 | Bool | None | String ref | OptionMap | OptionArray )
 
+primitive StringifyOptionType
+  fun apply(value: OptionType) : String iso =>
+    match value
+      | let value': F64 =>
+        value'.string()
+      | let value' : I64 =>
+        value'.string()
+      | let value' : Bool =>
+        value'.string()
+      | None =>
+        recover iso "null" end
+      | let value': String ref =>
+        value'.string()
+      | let value' : OptionMap =>
+        value'.string()
+      | let value': OptionArray =>
+        let output = String(25)
+        output.append("[")
+        var first : Bool = true
+        for value'' in value'.values() do
+          if first then
+            first = false
+            output.append("\n")
+          else
+            output.append(",\n")
+          end
+          output.append("\t" + StringifyOptionType(value''))
+        end
+        output.append("\n]")
+        output.string()
+    end
 class OptionMap
   var data: Map[String ref, OptionType]
   new create (size: USize = 0) =>
@@ -57,6 +128,18 @@ class OptionMap
     data(key) = value
   fun contains(key: box->String!) : Bool =>
     data.contains(key)
+  fun json() : JsonObject =>
+    let json': JsonObject= JsonObject
+    for pair in data.pairs() do
+      json'.data(data._1) = match data._2
+        | let value: String ref => value.string()
+        | let value: OptionMap => value.json()
+        | let value: OptionArray => value.json()
+        else
+          data._2
+        end
+    end
+    json'
 
 class OptionArray
   var data: Array[OptionType]
@@ -66,8 +149,21 @@ class OptionArray
     data(i)?
   fun ref update(i:USize, value: OptionType): (OptionType^ | None) ? =>
     data(i)? = value
-  fun ref push(value: OptionType) =>
+  fun ref push(value: OptionType)  =>
     data.push(value)
+  fun box values(): ArrayValues[OptionType, this->OptionType ref] ref^ =>
+    data.values()
+  fun json(): JsonArray =>
+    let arr: Array[JsonType] = Array[JsonType](data.size())
+    for value in data.values() do
+      arr.push(match value
+      | let value': String ref => value'.string()
+      | let value': OptionMap => value'.json()
+      | let value': OptionArray => value'.json()
+      | let value': JsonType => value'
+      end)
+    end
+    JsonArray.from_array(arr)
 
 class Service
   var name: String ref
@@ -92,6 +188,20 @@ class RPC
       clientStreaming = clientStreaming'
       serverStreaming = serverStreaming'
       options = options'
+  fun json(): JsonObject =>
+    let json': JsonObject = JsonObject
+    json'.data("inputType") = match inputType
+      | let inputType': String ref => inputType'.string()
+      | None => None
+    end
+    json'.data("outputType") = match outputType
+    | let outputType': String ref => outputType.string()
+      | None =>  None
+    end
+    json'.data("clientStreaming") = clientStreaming
+    json'.data("serverStreaming") = serverStreaming
+    json'.data("options") = options.json()
+    json'
 
 class FieldMap
   var from: String ref
@@ -99,7 +209,11 @@ class FieldMap
   new create(from': String ref = String, to': String ref = String) =>
     from = from'
     to = to'
-
+  fun json(): JsonObject =>
+    let json': JsonObject = JsonObject
+    json'.data("from") = from.string()
+    json'.data("to") = from.string()
+    json'
 class Extension
   var from: ISize
   var to: ISize
@@ -109,23 +223,35 @@ class Extension
 
 class Field
   var name: String ref
-  var typpe: String ref
-  var tagg: ISize
+  var fieldType: String ref
+  var fieldTag: ISize
   var map: FieldMap
   var oneof: String ref
   var required: Bool
   var repeated: Bool
   var options: OptionMap
 
-  new create(name': String ref = String, typpe': String ref = String, tagg': ISize = -1, map': FieldMap = FieldMap, oneof': String ref = String, required': Bool = false, repeated': Bool = false, options': OptionMap = OptionMap) =>
+  new create(name': String ref = String, fieldType': String ref = String, fieldTag': ISize = -1, map': FieldMap = FieldMap, oneof': String ref = String, required': Bool = false, repeated': Bool = false, options': OptionMap = OptionMap) =>
     name = name'
-    typpe = typpe'
-    tagg = tagg'
+    fieldType = fieldType'
+    fieldTag = fieldTag'
     map = map'
     oneof = oneof'
     required = required'
     repeated = repeated'
     options = options'
+
+  fun json(): JsonObject =>
+    let json': JsonObject = JsonObject
+    json'.data("name") = name.string()
+    json'.data("fieldType") = fieldType.string()
+    json'.data("fieldTag") = fieldTag.string()
+    json'.data("map") = map.string()
+    json'.data("oneof") = oneof.string()
+    json'.data("required") = required
+    json'.data("repeated") = repeated
+    json'.data("options") = options.json()
+    json'
 
 class Message
   var name: String ref
@@ -141,6 +267,29 @@ class Message
     messages = messages'
     fields = fields'
     extensions = extensions'
+  fun json(): JsonObject =>
+    let json': JsonObject = JsonObject
+    json'.data("name") = name.string()
+    let enumArr: Array[JsonType] = Array[JsonType](enums.size())
+    for enum in enums.values do
+      enumArr.push(enum.string())
+    end
+    json'.data("enums") = JsonArray.from_array(enumArr)
+    let extendsArr: Array[JsonType] = Array[JsonType](enums.size())
+    for extend in extends.values do
+      extendsArr.push(extend.json())
+    end
+    json'.data("extends") = JsonArray.from_array(extendsArr)
+    let messagesArr: Array[JsonType] = Array[JsonType](messages.size())
+    for message in messages.values do
+      messagesArr.push(message.json())
+    end
+    json'.data("messages") = JsonArray.from_array(messagesArr)
+    let fieldsArr: Array[JsonType] = Array[JsonType](fields.size())
+    for extend in extends.values do
+      extendsArr.push(extend.json())
+    end
+    json'.data("extends") = JsonArray.from_array(extendsArr)
 
 class Extend
   var name: String ref
@@ -148,6 +297,11 @@ class Extend
   new create(name': String ref = String, message': Message = Message) =>
     name = name'
     message = message'
+  fun json(): JsonObject =>
+    let json': JsonObject = JsonObject
+    json'.data("name") =  name.string()
+    json'.data("message") = message.json()
+    json'
 
 class MessageBody
   var enums: Array[Enum]

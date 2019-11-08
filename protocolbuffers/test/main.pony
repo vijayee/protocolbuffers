@@ -66,7 +66,7 @@ class iso _TestTokens is UnitTest
     try
       let path: FilePath = FilePath(t.env.root as AmbientAuth, "protocolbuffers/test/fixtures/comments.proto")?
       match CreateFile(path)
-      | let file: File =>
+        | let file: File =>
           let text: String ref = recover ref file.read_string(file.size()) end
           let tokens: Array[String ref] = Tokenize(text)
           var i : USize = 0
@@ -82,6 +82,24 @@ class iso _TestTokens is UnitTest
             t.fail("Token Error")
             t.complete(true)
           end
+        | FileError =>
+          t.fail("File Error")
+          t.complete(true)
+      end
+    else
+      t.fail("File Error")
+      t.complete(true)
+    end
+
+class iso _TestParser is UnitTest
+  fun name(): String => "Testing Parser"
+  fun apply(t: TestHelper) =>
+    try
+      let path: FilePath = FilePath(t.env.root as AmbientAuth, "protocolbuffers/test/fixtures/comments.proto")?
+      match CreateFile(path)
+        | let file: File =>
+          let text: String ref = recover ref file.read_string(file.size()) end
+          let schema: Schema = Parse(text)?
         | FileError =>
           t.fail("File Error")
           t.complete(true)

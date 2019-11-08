@@ -440,16 +440,16 @@ primitive ParseField
       var token = tokens.shift()?
       field.required = (token == "required")
       field.required = (token == "repeated")
-      field.typpe = tokens.shift()?
+      field.fieldType = tokens.shift()?
       field.name = tokens.shift()?
     }
     while tokens.size() > 0 do
       match tokens(0)?
         | "=" =>
           tokens.shift()?
-          field.tagg = tokens.shift()?.isize()?
+          field.fieldTag = tokens.shift()?.isize()?
         | "map" =>
-          field.typpe = tokens.shift()?
+          field.fieldType = tokens.shift()?
           tokens.shift()?
 
           if tokens(0)? != "<" then
@@ -482,11 +482,11 @@ primitive ParseField
             log(Error) and log.log("Missing Field Name")
             error
           end
-          if field.typpe == "" then
+          if field.fieldType == "" then
             log(Error) and log.log("Missing type in message field: " + field.name)
             error
           end
-          if field.tagg == -1 then
+          if field.fieldTag == -1 then
             log(Error) and log.log("Missing tag number in message field")
             error
           end
@@ -707,8 +707,8 @@ primitive Parse
         if message.name == extend.name then
           for field in extend.message.fields.values() do
             if (message.extensions.to == -1) or (message.extensions.from == -1)
-              or (field.tagg < message.extensions.from) or (field.tagg > message.extensions.to) then
-                log(Error) and log.log(message.name.string() + " does not delcare " + field.tagg.string() + " as an extension number")
+              or (field.fieldTag < message.extensions.from) or (field.fieldTag > message.extensions.to) then
+                log(Error) and log.log(message.name.string() + " does not delcare " + field.fieldTag.string() + " as an extension number")
                 error
             end
             message.fields.push(field)
@@ -719,7 +719,7 @@ primitive Parse
 
     let enumNameIsFieldType = {(enums: Array[Enum], field: Field): Bool =>
       for enum in enums.values() do
-        if enum.name == field.typpe then
+        if enum.name == field.fieldType then
           return true
         end
       end
@@ -746,15 +746,15 @@ primitive Parse
     for message in schema.messages.values() do
       for field in message.fields.values() do
         if try field.options(String(6).>append("packed"))? as Bool == true else false end then
-          if IsPackableType(field.typpe) then
-            if not field.typpe.contains(".") then
+          if IsPackableType(field.fieldType) then
+            if not field.fieldType.contains(".") then
               if enumNameIsFieldType(message.enums, field) then
                 continue
               end
             else
-              var fieldSplit: Array[String] = field.typpe.split(".")
+              var fieldSplit: Array[String] = field.fieldType.split(".")
               if fieldSplit.size() > 2 then
-                log(Error) and log.log("Poorly formed type: " + field.typpe.string())
+                log(Error) and log.log("Poorly formed type: " + field.fieldType.string())
                 error
               end
               let message': (Message | None) = findMessage(schema.messages, fieldSplit(0)?)
@@ -765,7 +765,7 @@ primitive Parse
                   end
               end
             end
-            log(Error) and log.log("Fields of type " + field.typpe.string() + " cannot be declared [packed=true]. " +
+            log(Error) and log.log("Fields of type " + field.fieldType.string() + " cannot be declared [packed=true]. " +
             "Only repeated fields of primitive numeric types (types which use " +
             "the varint, 32-bit, or 64-bit wire types) can be declared 'packed'. " +
             "See https://developers.google.com/protocol-buffers/docs/encoding#optional")
