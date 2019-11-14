@@ -20,37 +20,38 @@ class Schema
     options = options'
     extends = extends'
     services = services'
-fun json() : JsonObject =>
-  let json': JsonObject = JsonObject
-  json'.data("package") = package.string()
-  json'.data("version") = version.f64()
-  let importArr: Array[JsonType] = Array[JsonType](imports.size())
-  for import in imports.values() do
-    importArr.push(import.json())
-  end
-  json'.data("imports") = JsonArray.from_array(importArr)
-  let enumArr: Array[JsonType] = Array[JsonType](enums.size())
-  for enum in enums.values() do
-    enumArr.push(enum.json())
-  end
-  json'.data("enum") = JsonArray.from_array(enumArr)
-  let messageArr: Array[JsonType] = Array[JsonType](messages.size())
-  for message in messages.values() do
-    messageArr.push(message.json())
-  end
-  json'.data("messages") = JsonArray.from_array(messageArr)
-  json'.data("options") = options.json()
-  let extendArr: Array[JsonType] = Array[JsonType](extends.size())
-  for extend in extends.values() do
-    extendArr.push(extends.json())
-  end
-  json'.data("extends") = JsonArray.from_array(extendArr)
-  let serviceArr: Array[JsonType] = Array[JsonType](services.size())
-  for service in services.values() do
-    serviceArr.push(services.json())
-  end
-  json'.data("services") = JsonArray.from_array(serviceArr)
-  json'
+    
+  fun json() : JsonObject =>
+    let json': JsonObject = JsonObject
+    json'.data("package") = package.string()
+    json'.data("version") = version.f64()
+    let importArr: Array[JsonType] = Array[JsonType](imports.size())
+    for import in imports.values() do
+      importArr.push(import.json())
+    end
+    json'.data("imports") = JsonArray.from_array(importArr)
+    let enumArr: Array[JsonType] = Array[JsonType](enums.size())
+    for enum in enums.values() do
+      enumArr.push(enum.json())
+    end
+    json'.data("enum") = JsonArray.from_array(enumArr)
+    let messageArr: Array[JsonType] = Array[JsonType](messages.size())
+    for message in messages.values() do
+      messageArr.push(message.json())
+    end
+    json'.data("messages") = JsonArray.from_array(messageArr)
+    json'.data("options") = options.json()
+    let extendArr: Array[JsonType] = Array[JsonType](extends.size())
+    for extend in extends.values() do
+      extendArr.push(extends.json())
+    end
+    json'.data("extends") = JsonArray.from_array(extendArr)
+    let serviceArr: Array[JsonType] = Array[JsonType](services.size())
+    for service in services.values() do
+      serviceArr.push(services.json())
+    end
+    json'.data("services") = JsonArray.from_array(serviceArr)
+    json'
 
 
 class EnumValue
