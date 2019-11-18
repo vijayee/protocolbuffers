@@ -20,14 +20,14 @@ class Schema
     options = options'
     extends = extends'
     services = services'
-    
+
   fun json() : JsonObject =>
     let json': JsonObject = JsonObject
     json'.data("package") = package.string()
     json'.data("version") = version.f64()
     let importArr: Array[JsonType] = Array[JsonType](imports.size())
     for import in imports.values() do
-      importArr.push(import.json())
+      importArr.push(import.string())
     end
     json'.data("imports") = JsonArray.from_array(importArr)
     let enumArr: Array[JsonType] = Array[JsonType](enums.size())
@@ -43,12 +43,12 @@ class Schema
     json'.data("options") = options.json()
     let extendArr: Array[JsonType] = Array[JsonType](extends.size())
     for extend in extends.values() do
-      extendArr.push(extends.json())
+      extendArr.push(extend.json())
     end
     json'.data("extends") = JsonArray.from_array(extendArr)
     let serviceArr: Array[JsonType] = Array[JsonType](services.size())
     for service in services.values() do
-      serviceArr.push(services.json())
+      serviceArr.push(service.json())
     end
     json'.data("services") = JsonArray.from_array(serviceArr)
     json'
@@ -88,37 +88,7 @@ class Value
 
 type OptionType is (F64 | I64 | Bool | None | String ref | OptionMap | OptionArray )
 
-primitive StringifyOptionType
-  fun apply(value: OptionType) : String iso =>
-    match value
-      | let value': F64 =>
-        value'.string()
-      | let value' : I64 =>
-        value'.string()
-      | let value' : Bool =>
-        value'.string()
-      | None =>
-        recover iso "null" end
-      | let value': String ref =>
-        value'.string()
-      | let value' : OptionMap =>
-        value'.string()
-      | let value': OptionArray =>
-        let output = String(25)
-        output.append("[")
-        var first : Bool = true
-        for value'' in value'.values() do
-          if first then
-            first = false
-            output.append("\n")
-          else
-            output.append(",\n")
-          end
-          output.append("\t" + StringifyOptionType(value''))
-        end
-        output.append("\n]")
-        output.string()
-    end
+
 class OptionMap
   var data: Map[String ref, OptionType]
   new create (size: USize = 0) =>
@@ -132,12 +102,12 @@ class OptionMap
   fun json() : JsonObject =>
     let json': JsonObject= JsonObject
     for pair in data.pairs() do
-      json'.data(data._1) = match data._2
-        | let value: String ref => value.string()
-        | let value: OptionMap => value.json()
-        | let value: OptionArray => value.json()
+      json'.data(pair._1.string()) = match pair._2
+        | let value: String box => value.string()
+        | let value: OptionMap box => value.json()
+        | let value: OptionArray box => value.json()
         else
-          data._2
+          None
         end
     end
     json'
@@ -152,16 +122,15 @@ class OptionArray
     data(i)? = value
   fun ref push(value: OptionType)  =>
     data.push(value)
-  fun box values(): ArrayValues[OptionType, this->OptionType ref] ref^ =>
-    data.values()
   fun json(): JsonArray =>
     let arr: Array[JsonType] = Array[JsonType](data.size())
     for value in data.values() do
       arr.push(match value
-      | let value': String ref => value'.string()
-      | let value': OptionMap => value'.json()
-      | let value': OptionArray => value'.json()
-      | let value': JsonType => value'
+        | let value': String box => value'.string()
+        | let value': OptionMap box => value'.json()
+        | let value': OptionArray box => value'.json()
+      else
+        None
       end)
     end
     JsonArray.from_array(arr)
@@ -174,6 +143,13 @@ class Service
     name = name'
     methods = methods'
     options = options'
+  fun json(): JsonObject =>
+    let json': JsonObject = JsonObject
+    json'.data("name") = name.string()
+    let methodsArr: Array[JsonType] = Array[JsonType](methods.size())
+    json'.data("methods") =  JsonArray.from_array(methodsArr)
+    json'.data("options") = options.json()
+    json'
 
 class RPC
   var name: String ref
@@ -192,11 +168,11 @@ class RPC
   fun json(): JsonObject =>
     let json': JsonObject = JsonObject
     json'.data("inputType") = match inputType
-      | let inputType': String ref => inputType'.string()
+      | let inputType': String box => inputType'.string()
       | None => None
     end
     json'.data("outputType") = match outputType
-    | let outputType': String ref => outputType.string()
+      | let outputType': String box => outputType.string()
       | None =>  None
     end
     json'.data("clientStreaming") = clientStreaming
@@ -247,7 +223,7 @@ class Field
     json'.data("name") = name.string()
     json'.data("fieldType") = fieldType.string()
     json'.data("fieldTag") = fieldTag.string()
-    json'.data("map") = map.string()
+    json'.data("map") = map.json()
     json'.data("oneof") = oneof.string()
     json'.data("required") = required
     json'.data("repeated") = repeated
@@ -272,25 +248,26 @@ class Message
     let json': JsonObject = JsonObject
     json'.data("name") = name.string()
     let enumArr: Array[JsonType] = Array[JsonType](enums.size())
-    for enum in enums.values do
-      enumArr.push(enum.string())
+    for enum in enums.values() do
+      enumArr.push(enum.json())
     end
     json'.data("enums") = JsonArray.from_array(enumArr)
     let extendsArr: Array[JsonType] = Array[JsonType](enums.size())
-    for extend in extends.values do
+    for extend in extends.values() do
       extendsArr.push(extend.json())
     end
     json'.data("extends") = JsonArray.from_array(extendsArr)
     let messagesArr: Array[JsonType] = Array[JsonType](messages.size())
-    for message in messages.values do
+    for message in messages.values() do
       messagesArr.push(message.json())
     end
     json'.data("messages") = JsonArray.from_array(messagesArr)
     let fieldsArr: Array[JsonType] = Array[JsonType](fields.size())
-    for extend in extends.values do
+    for extend in extends.values() do
       extendsArr.push(extend.json())
     end
     json'.data("extends") = JsonArray.from_array(extendsArr)
+    json'
 
 class Extend
   var name: String ref
