@@ -538,7 +538,7 @@ primitive ParseMessage
     tokens.shift()?
     var level: USize = 1
     var body: Array[String ref] = Array[String ref] (1)
-    var message: Message = Message
+    var message: Message = Message(tokens.shift()?)
 
     if tokens(0)? != "{" then
       log(Error) and log.log("""Expected '{' but found '""" + tokens(0)?.string() +"""'""")
