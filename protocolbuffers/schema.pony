@@ -106,9 +106,12 @@ class OptionMap
         | let value: String box => value.string()
         | let value: OptionMap box => value.json()
         | let value: OptionArray box => value.json()
-        else
-          None
-        end
+        | let value: F64 box => value.f64()
+        | let value: I64 box => value.i64()
+        | let value: Bool => value
+      else
+        None
+      end
     end
     json'
 
@@ -129,6 +132,9 @@ class OptionArray
         | let value': String box => value'.string()
         | let value': OptionMap box => value'.json()
         | let value': OptionArray box => value'.json()
+        | let value': F64 box => value'.f64()
+        | let value': I64 box => value'.i64()
+        | let value': Bool => value'
       else
         None
       end)
