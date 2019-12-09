@@ -95,14 +95,17 @@ class iso _TestTokens is UnitTest
 class _TestParsing is UnitTest
   fun name (): String => "Testing Parser"
   fun apply(t: TestHelper) =>
+    t.long_test(1000000000)
     try
       let path: FilePath = FilePath(t.env.root as AmbientAuth, "protocolbuffers/test/fixtures/comments.proto")?
       match CreateFile(path)
       | let file: File =>
           let text: String ref = recover ref file.read_string(file.size()) end
+          let tokens: Array[String ref] = Tokenize(text)
           let logger : Logger[String] = StringLogger(Error, t.env.out)
           try
             let schema: Schema = Parse(text, logger)?
+            t.complete(true)
           else
             t.fail("Parsing Error")
             t.complete(true)

@@ -82,7 +82,7 @@ primitive ParseEnum
     tokens.shift()?
     let options: OptionMap = OptionMap
     let name: String ref = tokens.shift()?
-    let value: OptionMap = OptionMap
+    let value: Map[String ref, Value] = Map[String ref, Value]
     let enum: Enum = Enum(name, options, value)
 
     if tokens(0)? != "{" then
@@ -105,6 +105,8 @@ primitive ParseEnum
         enum.options(option._1) = option._2
         continue
       end
+      let eval: EnumValue = ParseEnumValue(tokens, log)?
+      enum.value(eval.name) = eval.value
     end
     log(Error) and log.log("No closing tag for enum")
     error
@@ -159,7 +161,7 @@ primitive ParseOption
           if name == "optimize_for" then
             match value
               | let value': String ref =>
-                if (value'.contains("SPEED") or value'.contains("CODE_SIZE") or value'.contains("LITE_RUNTIME")) then
+                if not(value'.contains("SPEED") or value'.contains("CODE_SIZE") or value'.contains("LITE_RUNTIME")) then
                   log(Error) and log.log("Unexpected value for option optimize_for: " + value'.string())
                   error
                 end
@@ -315,7 +317,7 @@ primitive ParseService
   fun apply (tokens: Array[String ref], log: Logger[String]) : Service ? =>
     tokens.shift()?
 
-    let service: Service = Service
+    let service: Service = Service(tokens.shift()?)
 
     if tokens(0)? != "{" then
       log(Error) and log.log("""Expected '{' but found '""" + tokens(0)?.string() +"""'""")
@@ -354,9 +356,9 @@ primitive ParseRPC
   fun apply (tokens: Array[String ref], log: Logger[String]) : RPC ? =>
     tokens.shift()?
 
-    var rpc = RPC()
-    if tokens.shift()? != "(" then
-      log(Error) and log.log("""Expected '(' but found """ + tokens(0)?.string())
+    var rpc = RPC(tokens.shift()?)
+    if tokens(0)? != "(" then
+      log(Error) and log.log("""Expected '(' but found ''""" + tokens(0)?.string() + """'""")
       error
     end
     tokens.shift()?
@@ -630,35 +632,45 @@ primitive ParseExtend
   fun apply(tokens: Array[String ref], log: Logger[String]): Extend ? =>
     Extend(tokens(1)?, ParseMessage(tokens, log)?)
 
-primitive ContainsQuote
+primitive ContainsOpenQuote
   fun apply (text: String box) : Bool ? =>
     if text.size() == 0 then
       return false
     end
     if (((text(0)? == '"') or (text(0)? == '\''))
-      and (try (text(1)? != '"') and (text(1)? != '\'') else false end)) then
+      and ((text.size() == 1) or (try (text(text.size() - 1)? != '"') and (text(text.size() - 1)? != '\'') else false end))) then
         return true
     end
     false
-
+primitive ContainsCloseQuote
+  fun apply (text: String box) : Bool ? =>
+    if text.size() == 0 then
+      return false
+    end
+    if (((text.size() == 1) or ((text(0)? != '"') or (text(0)? != '\'')))
+      and (try (text(text.size() - 1)? == '"') or (text(text.size() - 1)? == '\'') else false end)) then
+        return true
+    end
+    false
 primitive Parse
   fun apply (text: String ref, log: Logger[String]): Schema ? =>
     var tokens: Array[String ref] = Tokenize(text)
     var i: USize = 0
 
     while i < tokens.size() do
-      if ContainsQuote(tokens(i)?)? then
+      if try ContainsOpenQuote(tokens(i)?)? else false end then
         var j: USize = if tokens(i)?.size() == 1 then i + 1 else i end
-
+        var collapse: String ref = String
+        collapse.append(tokens(i)?)
         while j < tokens.size() do
-          if ContainsQuote(tokens(j)?)? then
-            var collapse: String ref = String
-            for k in Range(i, j + 1) do
+          if ContainsCloseQuote(tokens(j)?)? then
+            for k in Range(i + 1, j + 1) do
               collapse.append(tokens(k)?)
             end
-            var tokens2: Array[String ref] = tokens.slice(0, i)
+            let tokens2: Array[String ref] = tokens.slice(0, i)
+            i = tokens2.size()
             tokens2.push(collapse)
-            tokens2.concat(tokens.values(), j + 1, tokens.size())
+            tokens2.concat(tokens.values(), j + 1)
             tokens = tokens2
             break
           end

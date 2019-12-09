@@ -65,9 +65,9 @@ class EnumValue
 class Enum
   var name: String ref
   var options: OptionMap
-  var value: OptionMap
+  var value: Map[String ref, Value]
 
-  new create(name': String ref, options': OptionMap, value': OptionMap) =>
+  new create(name': String ref, options': OptionMap, value': Map[String ref, Value]) =>
     name = name'
     options = options'
     value = value'
@@ -76,7 +76,7 @@ class Enum
     let json': JsonObject = JsonObject
      json'.data("name") = name.string()
      json'.data("options") = options.json()
-     json'.data("value") = value.json()
+     //json'.data("value") = value.json()
      json'
 
 class Value
