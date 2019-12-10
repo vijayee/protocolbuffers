@@ -34,7 +34,7 @@ primitive ParsePackageName
   fun apply (tokens: Array[String ref], log: Logger[String]) : String ref ? =>
     tokens.shift()?
     let packageName: String ref = tokens.shift()?
-    if tokens(0)? != ";" then
+    if (tokens.size() == 0)  or (tokens(0)? != ";") then
       log(Error) and log.log("""Expected ';' but found '""" + tokens(0)?.string() +"""'""")
       error
     end
@@ -43,12 +43,21 @@ primitive ParsePackageName
 
 primitive ParseVersion
   fun apply (tokens: Array[String ref], log: Logger[String]) : USize ? =>
-    var version: String ref = tokens.shift()?
-    if tokens(0)? != ";" then
+    tokens.shift()?
+
+    if (tokens.size() == 0) or (tokens(0)? != "=") then
       log(Error) and log.log("""Expected ';' but found '""" + tokens(0)?.string() + """'""")
       error
     end
+
     tokens.shift()?
+    var version: String ref = tokens.shift()?
+    if (tokens.size() == 0) or (tokens(0)? != ";") then
+      log(Error) and log.log("""Expected ';'""")
+      error
+    end
+    tokens.shift()?
+
     match version
       | """"proto2"""" => USize(2)
       | """"proto3"""" => USize(3)
@@ -67,7 +76,7 @@ primitive ParseEnumValue
       log(Error) and log.log("""Expected '=' but found '""" + tokens(1)?.string() + """'""")
       error
     end
-    if (tokens(3)? != ";") and (tokens(3)? != "[")  then
+    if (tokens.size() == 0) or ((tokens(3)? != ";") and (tokens(3)? != "["))  then
       log(Error) and log.log("""Expected ';' or '[' but found '""" + tokens(1)?.string() + """'""")
       error
     end
@@ -94,7 +103,7 @@ primitive ParseEnum
     while tokens.size() > 0 do
       if tokens(0)? == "}" then
         tokens.shift()?
-        if tokens(0)? == ";" then
+        if (tokens.size() > 0) and (tokens(0)? == ";") then
           tokens.shift()?
         end
         return enum
@@ -230,7 +239,7 @@ primitive ParseOptionMap
               end
           end
           map(key) = value
-          if tokens(0)? == ";" then
+          if (tokens.size() > 0) and (tokens(0)? == ";") then
             tokens.shift()?
           end
         | "{" =>
@@ -266,7 +275,7 @@ primitive ParseImport
       text.delete(text.size().isize() - 1)
     end
 
-    if tokens(0)? != ";" then
+    if (tokens.size() == 0) or (tokens(0)? != ";") then
       log(Error) and log.log("Unexpected token: " + tokens(0)?.string() + ". Expected ';'")
       error
     end
@@ -328,7 +337,7 @@ primitive ParseService
     while tokens.size() > 0 do
       if tokens(0)? == "}" then
         tokens.shift()?
-        if tokens(0)? == ";" then
+        if (tokens.size() > 0) and (tokens(0)? == ";") then
           tokens.shift()?
         end
         return service
@@ -401,7 +410,7 @@ primitive ParseRPC
     end
     tokens.shift()?
 
-    if tokens(0)? == ";" then
+    if (tokens.size() > 0) and (tokens(0)? == ";")then
       tokens.shift()?
       return rpc
     end
@@ -415,7 +424,7 @@ primitive ParseRPC
     while tokens.size() > 0 do
       if tokens(0)? == "}" then
         tokens.shift()?
-        if tokens(0)? == ";" then
+        if (tokens.size() > 0) and (tokens(0)? == ";") then
           tokens.shift()?
         end
         return rpc
@@ -452,10 +461,9 @@ primitive ParseField
           field.fieldTag = tokens.shift()?.isize()?
         | "map" =>
           field.fieldType = tokens.shift()?
-          tokens.shift()?
 
           if tokens(0)? != "<" then
-            log(Error) and log.log("Unexpected token in map type '" +  tokens(0)?.string() + " expected '<'")
+            log(Error) and log.log("""Unexpected token in map type '""" +  tokens(0)?.string() + """' expected '<'""")
             error
           end
           tokens.shift()?
@@ -526,11 +534,7 @@ primitive ParseExtensions
         error
       end
     end
-    if tokens(0)? != ";" then
-      log(Error) and log.log("Missing Field Name")
-      error
-    end
-    if (tokens.shift()? != ";") then
+    if (tokens.size() == 0) or (tokens.shift()? != ";") then
       log(Error) and log.log("""Missing ';' in extensions definition""")
     end
     Extension(from, to)
@@ -600,7 +604,7 @@ primitive ParseMessageBody
           end
           tokens.shift()?
 
-          while tokens(0)? == "}" do
+          while tokens(0)? != "}" do
             tokens.unshift(String(8).>append("optional"))
             var field: Field = ParseField(tokens, log)?
             field.oneof = name
@@ -613,12 +617,12 @@ primitive ParseMessageBody
           tokens.shift()?
         | "reserved" =>
           tokens.shift()?
-          while tokens(0)? != ";" do
+          while (tokens.size() > 0) and (tokens(0)? != ";") do
             tokens.shift()?
           end
         | "option" =>
           tokens.shift()?
-          while tokens(0)? != ";" do
+          while (tokens.size() > 0) and (tokens(0)? != ";") do
             tokens.shift()?
           end
        else
@@ -704,6 +708,8 @@ primitive Parse
             end
             schema.options(option._1) = option._2
         | "import" =>
+          schema.imports.push(ParseImport(tokens, log)?)
+        | "extend" =>
           schema.extends.push(ParseExtend(tokens, log)?)
         | "service" =>
           schema.services.push(ParseService(tokens, log)?)

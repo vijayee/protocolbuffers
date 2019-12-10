@@ -101,7 +101,6 @@ class _TestParsing is UnitTest
       match CreateFile(path)
       | let file: File =>
           let text: String ref = recover ref file.read_string(file.size()) end
-          let tokens: Array[String ref] = Tokenize(text)
           let logger : Logger[String] = StringLogger(Error, t.env.out)
           try
             let schema: Schema = Parse(text, logger)?
