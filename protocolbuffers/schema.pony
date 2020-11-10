@@ -74,10 +74,12 @@ class Enum
 
   fun json(): JsonObject =>
     let json': JsonObject = JsonObject
-     json'.data("name") = name.string()
-     json'.data("options") = options.json()
-     //json'.data("value") = value.json()
-     json'
+    json'.data("name") = name.string()
+    json'.data("options") = options.json()
+    for key in value.keys() do
+      json'.data(key.string()) = try value(key.string())?.json() else None end
+    end
+    json'
 
 class Value
   var value: U64
@@ -85,6 +87,11 @@ class Value
   new create (value': U64, options': OptionMap = OptionMap) =>
     value = value'
     options = options'
+  fun json(): JsonObject =>
+    let json': JsonObject = JsonObject
+    json'.data("value") = value.i64()
+    json'.data("options") = options.json()
+    json'
 
 type OptionType is (F64 | I64 | Bool | None | String ref | OptionMap | OptionArray )
 
@@ -96,12 +103,23 @@ class OptionMap
   fun apply(key: String ref): this->OptionType ? =>
     data(key)?
   fun ref update(key: String ref, value: OptionType): (OptionType^ | None) =>
+    /*
+    match value
+      | let value': String box => @printf[I32](("\n" + value'.string() + "\n").cstring())
+      | let value': F64 box => @printf[I32](("\n" + value'.string() + "\n").cstring())
+      | let value': I64 box => @printf[I32](("\n" + value'.string() + "\n").cstring())
+      | let value': Bool => @printf[I32](("\n" + value'.string() + "\n").cstring())
+    else
+      None
+    end
+*/
     data(key) = value
   fun contains(key: box->String!) : Bool =>
     data.contains(key)
   fun json() : JsonObject =>
     let json': JsonObject= JsonObject
     for pair in data.pairs() do
+
       json'.data(pair._1.string()) = match pair._2
         | let value: String box => value.string()
         | let value: OptionMap box => value.json()
@@ -195,7 +213,7 @@ class FieldMap
   fun json(): JsonObject =>
     let json': JsonObject = JsonObject
     json'.data("from") = from.string()
-    json'.data("to") = from.string()
+    json'.data("to") = to.string()
     json'
 class Extension
   var from: ISize
@@ -258,7 +276,7 @@ class Message
       enumArr.push(enum.json())
     end
     json'.data("enums") = JsonArray.from_array(enumArr)
-    let extendsArr: Array[JsonType] = Array[JsonType](enums.size())
+    let extendsArr: Array[JsonType] = Array[JsonType](extends.size())
     for extend in extends.values() do
       extendsArr.push(extend.json())
     end
@@ -269,10 +287,10 @@ class Message
     end
     json'.data("messages") = JsonArray.from_array(messagesArr)
     let fieldsArr: Array[JsonType] = Array[JsonType](fields.size())
-    for extend in extends.values() do
-      extendsArr.push(extend.json())
+    for field in fields.values() do
+      fieldsArr.push(field.json())
     end
-    json'.data("extends") = JsonArray.from_array(extendsArr)
+    json'.data("fields") = JsonArray.from_array(fieldsArr)
     json'
 
 class Extend

@@ -2,6 +2,7 @@ use ".."
 use "files"
 use "ponytest"
 use "logger"
+use "json"
 
 actor Main is TestList
   new create(env: Env) =>
@@ -9,8 +10,9 @@ actor Main is TestList
   new make () =>
     None
   fun tag tests(test: PonyTest) =>
-    test(_TestTokens)
-    test(_TestParsing)
+    //test(_TestTokens)
+    //test(_TestParsing)
+    test(_TestCompiling)
 
 class iso _TestTokens is UnitTest
   fun name(): String => "Testing Tokens"
@@ -97,13 +99,47 @@ class _TestParsing is UnitTest
   fun apply(t: TestHelper) =>
     t.long_test(1000000000)
     try
-      let path: FilePath = FilePath(t.env.root as AmbientAuth, "protocolbuffers/test/fixtures/comments.proto")?
+      let path: FilePath = FilePath(t.env.root as AmbientAuth, "protocolbuffers/test/proto/test_repeated_enum.proto")?
       match CreateFile(path)
       | let file: File =>
           let text: String ref = recover ref file.read_string(file.size()) end
           let logger : Logger[String] = StringLogger(Error, t.env.out)
           try
             let schema: Schema = Parse(text, logger)?
+            t.complete(true)
+          else
+            t.fail("Parsing Error")
+            t.complete(true)
+          end
+        | FileError =>
+          t.fail("File Error")
+          t.complete(true)
+      end
+    else
+      t.fail("File Error")
+      t.complete(true)
+    end
+
+class _TestCompiling is UnitTest
+  fun name (): String => "Testing Compiling"
+  fun apply(t: TestHelper) =>
+    t.long_test(1000000000)
+    try
+      let path: FilePath = FilePath(t.env.root as AmbientAuth, "protocolbuffers/test/fixtures/enum.proto")?
+      match CreateFile(path)
+      | let file: File =>
+          let text: String ref = recover ref file.read_string(file.size()) end
+          let logger : Logger[String] = StringLogger(Error, t.env.out)
+          try
+            let schema: Schema = Parse(text, logger)?
+            let doc = JsonDoc
+            doc.data = schema.json()
+            //t.log(doc.string("  ", true))
+            //t.fail()
+            let path': FilePath = FilePath(t.env.root as AmbientAuth, "./build/compiled/")?
+            path'.mkdir()
+            Compile(schema, path')?
+            //t.fail()
             t.complete(true)
           else
             t.fail("Parsing Error")
