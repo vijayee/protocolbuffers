@@ -43,14 +43,16 @@ primitive Compile
     end
     for message in schema.messages.values() do
       for enum in message.enums.values() do
-        _CompileEnum(enum, path, unique)?
+        _CompileEnum(enum, path, unique, message.name)?
       end
     end
 
 primitive _CompileEnum
-  fun apply(enum: Enum, path: FilePath, unique: Set[String ref])? =>
-    let enumName: String ref = _Capitalize(enum.name)
-
+  fun apply(enum: Enum, path: FilePath, unique: Set[String ref], prefix: String ref = String(0))? =>
+    var enumName: String ref = _Capitalize(enum.name)
+    if prefix.size() > 0 then
+      enumName = _Capitalize(prefix).>append("_").>append(enumName)
+    end
     let text: String ref = String(100)
     let typetxt: String ref = String(100)
     let decodetxt: String ref = String(100)
@@ -64,8 +66,8 @@ primitive _CompileEnum
     _Space(typetxt)
     _Append(typetxt, "(")
 
-    let name: String ref = String(enum.name.size() + 5)
-    name.append(enum.name)
+    let name: String ref = String(enumName.size() + 5)
+    name.append(enumName)
     name.append(".pony")
     var first: Bool = true
     var i: USize = 0
